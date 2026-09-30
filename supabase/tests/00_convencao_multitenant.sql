@@ -33,7 +33,18 @@ select * from (values
    'escritório. A policy dela filtra por id = escritorio_atual()'),
   ('tribunais',
    'catálogo global: a sigla de um tribunal é a mesma para todos os '
-   'escritórios, e é o que os feriados forenses referenciam')
+   'escritórios, e é o que os feriados forenses referenciam'),
+  ('feriados',
+   'catálogo global curado pela Flypi: portaria do TJRS vale para todo '
+   'escritório que atua no TJRS. Exceção local do escritório vai em '
+   'feriados_escritorio, que TEM escritorio_id'),
+  ('tipos_ato',
+   'catálogo global de espécies de ato processual: "sentença" é sentença em '
+   'qualquer escritório'),
+  ('regras_prazo',
+   'catálogo global de regras processuais, ratificado por advogado: o prazo '
+   'do CPC não varia por escritório, e permitir que variasse seria permitir '
+   'que um escritório calculasse prazo por conta própria com o nosso nome')
 ) as t(tabela, motivo);
 
 -- Tudo em `public` que seja tabela nossa — inclusive as exceções acima.
