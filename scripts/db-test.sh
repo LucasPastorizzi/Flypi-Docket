@@ -66,6 +66,16 @@ for t in "${testes[@]}"; do
   n_ok="$(printf '%s\n' "$saida" | grep -c '^ok ' || true)"
   total=$((total + n_ok + n_falhas))
   falhas=$((falhas + n_falhas))
+
+  # Divergência entre o plano e o que rodou é falha, não observação. Sem isto,
+  # um teste acrescentado e um `plan()` esquecido fazem a suíte anunciar
+  # sucesso enquanto o pgTAP avisa que o número não fecha — e o aviso passa
+  # por comentário TAP, que nenhuma contagem de "not ok" pega.
+  if printf '%s\n' "$saida" | grep -q 'Looks like you planned'; then
+    echo ">>> PLANO DIVERGENTE: o arquivo declara um número de testes "
+    echo ">>> diferente do que executou. Ajuste o plan()."
+    falhas=$((falhas + 1))
+  fi
 done
 
 echo

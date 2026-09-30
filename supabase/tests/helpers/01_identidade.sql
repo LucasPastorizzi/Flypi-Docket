@@ -53,3 +53,28 @@ $$;
 
 grant usage on schema teste to anon, authenticated;
 grant execute on all functions in schema teste to anon, authenticated;
+
+-- Conta quantas linhas um comando de escrita realmente afetou.
+--
+-- Existe porque RLS não recusa UPDATE em linha alheia com erro: a linha
+-- simplesmente não entra no conjunto que o USING autoriza, e o comando afeta
+-- zero linhas. Essa é a resposta certa — erro revelaria que a linha existe —,
+-- mas significa que a asserção tem que olhar a contagem, e não a ausência de
+-- exceção.
+--
+-- SECURITY INVOKER (o padrão): a identidade de quem chama é a que vale, senão
+-- a função testaria os privilégios do próprio dono.
+create or replace function teste.linhas_afetadas(p_comando text)
+returns integer
+language plpgsql
+as $$
+declare
+  n integer;
+begin
+  execute p_comando;
+  get diagnostics n = row_count;
+  return n;
+end;
+$$;
+
+grant execute on all functions in schema teste to anon, authenticated;
