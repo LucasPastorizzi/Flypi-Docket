@@ -11,3 +11,6 @@ dist/
 
 # Config local do Claude Code, não do projeto.
 .claude/
+
+# Senhas das contas de demonstracao, geradas pelo script de seed.
+.credenciais-demo.local
