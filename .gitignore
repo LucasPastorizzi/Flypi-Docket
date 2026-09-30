@@ -1,0 +1,10 @@
+node_modules/
+dist/
+
+# Guarda a URL e a anon key do projeto. A anon key é pública por desenho — vai
+# no bundle do navegador de todo jeito —, mas a URL do projeto não precisa
+# estar no repositório, e um .env fora do git evita que alguém acrescente aqui,
+# por hábito, uma chave que não deveria sair do servidor.
+.env
+.env.local
+.env.*.local
