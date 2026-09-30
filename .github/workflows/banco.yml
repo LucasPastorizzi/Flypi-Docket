@@ -1,11 +1,15 @@
 # Roda a suíte de banco em todo push e PR.
 #
-# Sem Docker e sem service container, e a razão é paridade: o Postgres é
-# instalado no próprio runner, do mesmo jeito que o README manda instalar na
-# máquina de quem desenvolve. Com `services: postgres`, o servidor fica num
-# container e o pgTAP seria compilado no filesystem do runner — a extensão
-# nunca apareceria para o servidor, e `create extension pgtap` falharia por um
-# motivo que não tem nada a ver com o schema.
+# Sem Docker e sem service container, e a razão é paridade: o cluster é criado
+# com `initdb` numa porta própria, exatamente como o README manda criar na
+# máquina de quem desenvolve. Um setup para entender, não dois.
+#
+# O caminho descartado foi usar o cluster que o pacote do Ubuntu gerencia
+# (`pg_ctlcluster`). Ele traz três fontes de falha que não têm nada a ver com o
+# schema: a imagem do runner já ocupa a 5432, o postinst do pacote inicia o
+# cluster sozinho — de modo que um `start` explícito falha por já ter sido
+# feito — e a porta real passa a depender de descobrir em `pg_lsclusters`.
+# Cluster próprio em porta própria não tem nenhuma delas.
 #
 # A suíte não precisa do stack Supabase porque o que ela consome dele — os três
 # roles e auth.uid() — está emulado em supabase/tests/helpers, com a
@@ -15,6 +19,13 @@ name: banco
 on:
   push:
   pull_request:
+
+env:
+  # Porta própria, longe da 5432 que a imagem do runner usa.
+  PGHOST: 127.0.0.1
+  PGPORT: '55432'
+  PGUSER: postgres
+  DIR_CLUSTER: /var/tmp/flypi
 
 jobs:
   rls:
@@ -26,11 +37,11 @@ jobs:
     steps:
       - uses: actions/checkout@v5
 
-      # Ubuntu 24.04 só traz até o postgresql-17 client, e não traz o
-      # server-dev-17 de que o pgTAP precisa para compilar. O repositório do
-      # próprio projeto Postgres (PGDG) traz — e é ele que permite fixar a
-      # major igual à que o Supabase serve, que é o ponto: divergir de major
-      # esconderia diferença de comportamento de RLS entre versões.
+      # Ubuntu 24.04 não traz o server-dev-17 de que o pgTAP precisa para
+      # compilar. O repositório do próprio projeto Postgres (PGDG) traz — e é
+      # ele que permite fixar a major igual à que o Supabase serve, que é o
+      # ponto: divergir de major esconderia diferença de comportamento de RLS
+      # entre versões.
       - name: Instalar Postgres 17 do repositório PGDG
         run: |
           sudo apt-get update
@@ -44,35 +55,59 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y \
             postgresql-17 postgresql-client-17 postgresql-server-dev-17 make git
+          # initdb e pg_ctl não entram no PATH pelo pacote, só o psql entra por
+          # alternatives. Pôr o diretório da 17 à frente garante que todos os
+          # binários usados venham da mesma major.
+          echo "/usr/lib/postgresql/17/bin" >> "$GITHUB_PATH"
 
       # pgTAP não está empacotado no Ubuntu e é compilado do fonte — são um
-      # Makefile e arquivos SQL, sem dependência além do pg_config.
+      # Makefile e arquivos SQL, sem dependência além do pg_config. A tag é a
+      # mesma que o README manda usar: sem fixar, o branch default já se anuncia
+      # como a versão seguinte antes de ela sair, e a suíte passaria a rodar
+      # contra um pgTAP aqui e outro na máquina de quem desenvolve.
       - name: Compilar e instalar o pgTAP
         run: |
-          git clone --depth 1 --branch v1.3.4 https://github.com/theory/pgtap.git /tmp/pgtap
+          git clone --depth 1 --branch v1.3.4 \
+            https://github.com/theory/pgtap.git /tmp/pgtap
           make -C /tmp/pgtap
           sudo make -C /tmp/pgtap install
 
-      # A imagem do runner já traz um PostgreSQL ocupando a 5432, então o
-      # cluster 17 recém-instalado nasce noutra porta — e o pacote do Ubuntu já
-      # o inicia no postinst, de modo que um `start` explícito falha com
-      # "cluster is already running". Por isso a porta é descoberta em vez de
-      # suposta, e o start é tolerado: quem decide se deu certo são o `test -n`
-      # e o `pg_isready`, que verificam o resultado em vez da saída do comando.
-      - name: Subir o cluster e descobrir a porta
+      # As falhas viram anotação via `::error::`, e não só linha de log. Numa
+      # falha de infraestrutura como esta, o log do job exige sessão para ser
+      # lido, enquanto a anotação aparece na aba de checks e na API — o que
+      # torna a causa visível para quem estiver olhando o PR sem abrir o run.
+      - name: Subir um cluster próprio
         run: |
-          sudo pg_ctlcluster 17 main start || true
-          pg_lsclusters
-          PORTA="$(pg_lsclusters -h | awk '$1=="17" && $2=="main" {print $3}')"
-          test -n "$PORTA"
-          sudo -u postgres psql -p "$PORTA" \
-            -c "alter user postgres password 'postgres'"
-          pg_isready -h localhost -p "$PORTA"
-          echo "PGPORT=$PORTA" >> "$GITHUB_ENV"
+          mkdir -p "$DIR_CLUSTER"
+          if ! initdb -D "$DIR_CLUSTER/pgdata" -U postgres \
+                 --locale=C -E UTF8 > "$DIR_CLUSTER/initdb.log" 2>&1; then
+            echo "::error title=initdb::$(tail -c 900 "$DIR_CLUSTER/initdb.log" | tr '\n' ' ')"
+            exit 1
+          fi
+          # unix_socket_directories aponta para o diretório do cluster porque o
+          # caminho do socket tem limite de 103 bytes, e o padrão de sistema
+          # exigiria permissão de root.
+          if ! pg_ctl -D "$DIR_CLUSTER/pgdata" \
+                 -o "-p $PGPORT -c listen_addresses=$PGHOST -c unix_socket_directories=$DIR_CLUSTER" \
+                 -l "$DIR_CLUSTER/server.log" start; then
+            echo "::error title=pg_ctl::$(tail -c 900 "$DIR_CLUSTER/server.log" | tr '\n' ' ')"
+            exit 1
+          fi
+          pg_isready -h "$PGHOST" -p "$PGPORT"
+          psql -tAc 'select version()' -d postgres
 
       - name: Rodar a suíte
-        env:
-          PGHOST: localhost
-          PGUSER: postgres
-          PGPASSWORD: postgres
-        run: ./scripts/db-test.sh
+        run: |
+          if ! ./scripts/db-test.sh > /tmp/suite.log 2>&1; then
+            # Cada asserção reprovada vira uma anotação própria. Falha de
+            # isolamento é o resultado mais importante deste repositório, e ela
+            # deve ser legível sem abrir log nenhum.
+            grep -E '^not ok|^>>>|ERRO FATAL|^ERROR' /tmp/suite.log \
+              | head -20 \
+              | while IFS= read -r linha; do
+                  echo "::error title=suite::$linha"
+                done
+            tail -60 /tmp/suite.log
+            exit 1
+          fi
+          tail -15 /tmp/suite.log
