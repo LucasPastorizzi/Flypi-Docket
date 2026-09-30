@@ -49,7 +49,7 @@ jobs:
       # Makefile e arquivos SQL, sem dependência além do pg_config.
       - name: Compilar e instalar o pgTAP
         run: |
-          git clone --depth 1 --branch v1.3.5 https://github.com/theory/pgtap.git /tmp/pgtap
+          git clone --depth 1 --branch v1.3.4 https://github.com/theory/pgtap.git /tmp/pgtap
           make -C /tmp/pgtap
           sudo make -C /tmp/pgtap install
 

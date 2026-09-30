@@ -33,11 +33,17 @@ Para rodar um arquivo só:
 
 ```bash
 brew install postgresql@17
-git clone --depth 1 https://github.com/theory/pgtap.git /tmp/pgtap && make -C /tmp/pgtap && make -C /tmp/pgtap install
+git clone --depth 1 --branch v1.3.4 https://github.com/theory/pgtap.git /tmp/pgtap && make -C /tmp/pgtap && make -C /tmp/pgtap install
 ```
 
 `pgtap` não existe no Homebrew e é compilado do fonte — são um Makefile e
 arquivos SQL, sem dependência além do `pg_config`.
+
+A versão é fixada na mesma tag que o CI usa. Sem `--branch`, o clone pega o
+branch default, que já se anuncia como a versão seguinte antes de ela ser
+lançada — e aí a suíte roda contra um pgTAP na máquina de quem desenvolve e
+contra outro no CI, o que faz divergência de resultado parecer defeito do
+schema.
 
 Subir um cluster descartável, separado do cluster padrão da máquina:
 
