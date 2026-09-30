@@ -53,16 +53,26 @@ jobs:
           make -C /tmp/pgtap
           sudo make -C /tmp/pgtap install
 
-      - name: Subir o cluster
+      # A imagem do runner já traz um PostgreSQL ocupando a 5432, então o
+      # cluster 17 recém-instalado nasce noutra porta — e o pacote do Ubuntu já
+      # o inicia no postinst, de modo que um `start` explícito falha com
+      # "cluster is already running". Por isso a porta é descoberta em vez de
+      # suposta, e o start é tolerado: quem decide se deu certo são o `test -n`
+      # e o `pg_isready`, que verificam o resultado em vez da saída do comando.
+      - name: Subir o cluster e descobrir a porta
         run: |
-          sudo pg_ctlcluster 17 main start
-          sudo -u postgres psql -c "alter user postgres password 'postgres'"
-          pg_isready -h localhost -p 5432
+          sudo pg_ctlcluster 17 main start || true
+          pg_lsclusters
+          PORTA="$(pg_lsclusters -h | awk '$1=="17" && $2=="main" {print $3}')"
+          test -n "$PORTA"
+          sudo -u postgres psql -p "$PORTA" \
+            -c "alter user postgres password 'postgres'"
+          pg_isready -h localhost -p "$PORTA"
+          echo "PGPORT=$PORTA" >> "$GITHUB_ENV"
 
       - name: Rodar a suíte
         env:
           PGHOST: localhost
-          PGPORT: '5432'
           PGUSER: postgres
           PGPASSWORD: postgres
         run: ./scripts/db-test.sh
