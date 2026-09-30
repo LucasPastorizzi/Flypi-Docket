@@ -8,3 +8,6 @@ dist/
 .env
 .env.local
 .env.*.local
+
+# Config local do Claude Code, não do projeto.
+.claude/
