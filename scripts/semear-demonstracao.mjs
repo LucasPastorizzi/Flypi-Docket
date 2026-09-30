@@ -153,8 +153,9 @@ async function limpar() {
 
   // As contas de autenticação, que não pertencem a nenhuma tabela nossa.
   const lista = await api('/auth/v1/admin/users?per_page=200', 'GET');
+  const emailsDemo = [...CONTAS.map((c) => c.email), 'joana@cliente.flypi.local'];
   for (const u of lista.users ?? []) {
-    if (CONTAS.some((c) => c.email === u.email)) {
+    if (emailsDemo.includes(u.email)) {
       await api(`/auth/v1/admin/users/${u.id}`, 'DELETE');
     }
   }
@@ -325,6 +326,34 @@ async function main() {
       titulo: 'Juntar procuração atualizada', responsavel_id: tiago.id,
       atribuido_por: helena.id, data_limite: emDias(1) },
   ]);
+
+  // --- portal do cliente final ---
+  //
+  // A concessão é POR PROCESSO, e de propósito o cliente recebe acesso a
+  // apenas um dos três em que figura como parte. É o que torna possível ver na
+  // tela a diferença entre "ser parte" e "ter acesso liberado" — que é a razão
+  // de acessos_portal existir em vez de o portal deduzir do CPF.
+  const senhaPortal = senhaSorteada();
+  const contaPortal = await api('/auth/v1/admin/users', 'POST', {
+    email: 'joana@cliente.flypi.local', password: senhaPortal,
+    email_confirm: true,
+  });
+
+  await inserir('usuarios_portal', [{
+    id: contaPortal.id, escritorio_id: escritorio.id,
+    cliente_id: clientes[0].id, nome: 'Joana Beltrame (fictícia)',
+    email: 'joana@cliente.flypi.local', criado_por: helena.id,
+  }]);
+
+  await inserir('acessos_portal', [{
+    escritorio_id: escritorio.id, cliente_id: clientes[0].id,
+    processo_id: processos[0].id, concedido_por: helena.id,
+    observacao: 'Liberado para acompanhamento (demonstração)',
+  }]);
+  console.log('  portal: 1 acesso concedido de 3 processos em que é parte');
+
+  credenciais.push(
+    `${'cliente (portal)'.padEnd(22)} joana@cliente.flypi.local  ${senhaPortal}`);
 
   const arquivo = '.credenciais-demo.local';
   writeFileSync(arquivo,

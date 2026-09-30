@@ -7,6 +7,24 @@
    inclui advogados com baixa visão — então o anel é grosso e de alto
    contraste, não discreto. */
 @layer base {
+  /* Fundo e esquema de cor declarados, e não herdados.
+     Sem isto, o navegador em modo escuro deixa o body transparente, e as áreas
+     que não estão dentro de um container com cor — margens, tela de
+     carregamento, páginas curtas — ficam pretas com o nosso texto escuro em
+     cima. Descoberto rodando a tela com o sistema em modo escuro.
+     A interface é clara porque ainda não existe um tema escuro desenhado;
+     declarar `light` evita que o navegador aplique o dele pela metade, que é
+     pior que não ter nenhum. */
+  :root {
+    color-scheme: light;
+  }
+
+  html, body, #raiz {
+    min-height: 100%;
+    background-color: var(--color-slate-50);
+    color: var(--color-slate-900);
+  }
+
   :focus-visible {
     outline: 3px solid var(--color-sky-600);
     outline-offset: 2px;

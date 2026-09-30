@@ -349,3 +349,62 @@ export async function listarPublicacoes() {
     .limit(100);
   return { dados: (data ?? []) as Publicacao[], erro: error?.message ?? null };
 }
+
+// ---------------------------------------------------------------------------
+// Portal do cliente final
+// ---------------------------------------------------------------------------
+
+// O perfil do cliente logado. Tabela separada de `usuarios` de propósito: são
+// universos disjuntos, e um trigger no banco impede a mesma conta de existir
+// nos dois. Se esta consulta devolve linha, quem está logado é cliente; se a
+// de `usuarios` devolve, é equipe. Nunca as duas.
+export async function obterPerfilDoPortal(authId: string) {
+  const { data, error } = await supabase
+    .from('usuarios_portal')
+    .select('id, escritorio_id, cliente_id, nome, email')
+    .eq('id', authId)
+    .maybeSingle();
+  return {
+    dados: data as {
+      id: string; escritorio_id: string; cliente_id: string;
+      nome: string; email: string;
+    } | null,
+    erro: error?.message ?? null,
+  };
+}
+
+// Os processos que o cliente alcança.
+//
+// Nenhum filtro aqui, e é o ponto: quem recorta é a policy, que exige uma
+// concessão viva em acessos_portal. O cliente pode ser parte em dez processos
+// e enxergar dois — ser parte não basta, e é essa diferença que torna o acesso
+// revogável sem mexer em dado processual.
+export async function listarProcessosDoPortal() {
+  const { data, error } = await supabase
+    .from('processos')
+    .select(`id, numero_cnj, numero_pasta, tribunal, comarca, situacao,
+             classe, assunto, data_distribuicao, valor_causa, segredo_justica,
+             advogado_responsavel_id, orgao_julgador, uf, criado_em`)
+    .order('criado_em', { ascending: false });
+  return {
+    dados: (data ?? []) as ProcessoDetalhado[], erro: error?.message ?? null,
+  };
+}
+
+export async function listarDocumentosDoPortal(processoId: string) {
+  // A policy do portal exige as três coisas juntas: concessão viva no
+  // processo, documento marcado como visível, e não sigiloso. O filtro por
+  // processo aqui é navegação, não segurança.
+  const { data, error } = await supabase
+    .from('documentos')
+    .select('id, nome_original, mime, tamanho_bytes, criado_em')
+    .eq('processo_id', processoId)
+    .order('criado_em', { ascending: false });
+  return {
+    dados: (data ?? []) as Array<{
+      id: string; nome_original: string; mime: string | null;
+      tamanho_bytes: number | null; criado_em: string;
+    }>,
+    erro: error?.message ?? null,
+  };
+}
