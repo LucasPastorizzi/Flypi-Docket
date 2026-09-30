@@ -1,10 +1,15 @@
 # Roda a suíte de banco em todo push e PR.
 #
-# Sem Docker de propósito: o runner do GitHub já oferece um serviço de
-# Postgres, e depender de `supabase start` traria uma subida de container de
-# minutos a cada execução. A suíte roda contra um Postgres nu porque o
-# ambiente Supabase de que ela depende — os três roles e auth.uid() — está
-# emulado em supabase/tests/helpers, com a implementação real de auth.uid().
+# Sem Docker e sem service container, e a razão é paridade: o Postgres é
+# instalado no próprio runner, do mesmo jeito que o README manda instalar na
+# máquina de quem desenvolve. Com `services: postgres`, o servidor fica num
+# container e o pgTAP seria compilado no filesystem do runner — a extensão
+# nunca apareceria para o servidor, e `create extension pgtap` falharia por um
+# motivo que não tem nada a ver com o schema.
+#
+# A suíte não precisa do stack Supabase porque o que ela consome dele — os três
+# roles e auth.uid() — está emulado em supabase/tests/helpers, com a
+# implementação real de auth.uid() e não com um atalho de teste.
 name: banco
 
 on:
@@ -13,33 +18,46 @@ on:
 
 jobs:
   rls:
-    runs-on: ubuntu-latest
-
-    services:
-      postgres:
-        # Mesma major do Postgres que o Supabase serve hoje. Divergir de major
-        # aqui esconderia diferença de comportamento de RLS entre versões, que
-        # é justamente o que esta suíte existe para pegar.
-        image: postgres:17
-        env:
-          POSTGRES_PASSWORD: postgres
-        ports: ['5432:5432']
-        options: >-
-          --health-cmd pg_isready
-          --health-interval 5s
-          --health-timeout 5s
-          --health-retries 10
+    # Versão fixa, não `ubuntu-latest`: a major do Postgres disponível muda com
+    # a do Ubuntu, e uma troca silenciosa de base é a última coisa que se quer
+    # embaixo de uma suíte cujo objeto é comportamento de RLS.
+    runs-on: ubuntu-24.04
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
-      - name: Instalar cliente do Postgres e compilar pgTAP
+      # Ubuntu 24.04 só traz até o postgresql-17 client, e não traz o
+      # server-dev-17 de que o pgTAP precisa para compilar. O repositório do
+      # próprio projeto Postgres (PGDG) traz — e é ele que permite fixar a
+      # major igual à que o Supabase serve, que é o ponto: divergir de major
+      # esconderia diferença de comportamento de RLS entre versões.
+      - name: Instalar Postgres 17 do repositório PGDG
         run: |
           sudo apt-get update
-          sudo apt-get install -y postgresql-client postgresql-server-dev-17 make
-          git clone --depth 1 https://github.com/theory/pgtap.git /tmp/pgtap
+          sudo apt-get install -y curl ca-certificates lsb-release
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl -fsSL \
+            -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc \
+            https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          echo "deb [signed-by=/usr/share/postgresql-common/pgdg/apt.postgresql.org.asc] https://apt.postgresql.org/pub/repos/apt $(lsb_release -cs)-pgdg main" \
+            | sudo tee /etc/apt/sources.list.d/pgdg.list
+          sudo apt-get update
+          sudo apt-get install -y \
+            postgresql-17 postgresql-client-17 postgresql-server-dev-17 make git
+
+      # pgTAP não está empacotado no Ubuntu e é compilado do fonte — são um
+      # Makefile e arquivos SQL, sem dependência além do pg_config.
+      - name: Compilar e instalar o pgTAP
+        run: |
+          git clone --depth 1 --branch v1.3.5 https://github.com/theory/pgtap.git /tmp/pgtap
           make -C /tmp/pgtap
           sudo make -C /tmp/pgtap install
+
+      - name: Subir o cluster
+        run: |
+          sudo pg_ctlcluster 17 main start
+          sudo -u postgres psql -c "alter user postgres password 'postgres'"
+          pg_isready -h localhost -p 5432
 
       - name: Rodar a suíte
         env:
