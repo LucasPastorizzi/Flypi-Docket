@@ -44,7 +44,12 @@ select * from (values
   ('regras_prazo',
    'catálogo global de regras processuais, ratificado por advogado: o prazo '
    'do CPC não varia por escritório, e permitir que variasse seria permitir '
-   'que um escritório calculasse prazo por conta própria com o nosso nome')
+   'que um escritório calculasse prazo por conta própria com o nosso nome'),
+  ('finalidades_tratamento',
+   'catálogo global de base legal e prazo de descarte: a base legal para '
+   'tratar dado de processo judicial é a mesma para todos, e declarações '
+   'divergentes sobre o mesmo tratamento — feito pelo mesmo software, nosso '
+   '— seriam um problema de conformidade e não de configuração')
 ) as t(tabela, motivo);
 
 -- Tudo em `public` que seja tabela nossa — inclusive as exceções acima.

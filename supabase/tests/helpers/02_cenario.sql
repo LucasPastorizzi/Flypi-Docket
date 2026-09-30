@@ -170,3 +170,21 @@ $$;
 -- não há dado de domínio aqui, e ela existe só dentro do banco de teste.
 grant usage on schema cenario to anon, authenticated;
 grant select on cenario.ids to anon, authenticated;
+
+-- Todos os processos do cenário, com o flag de sigilo, fora do alcance do RLS.
+--
+-- Serve à asserção de acordo entre a policy de `processos` e
+-- app.pode_ver_processo(): para comparar os dois conjuntos é preciso enumerar
+-- o universo, e enumerá-lo por SELECT já estaria filtrado pelo que se quer
+-- testar.
+create or replace view cenario.processos_todos as
+select p.pid, p.sigiloso from cenario.ids i
+ cross join lateral (values
+   (i.processo_a, false),
+   (i.processo_a_sigiloso, true),
+   (i.processo_a_sem_portal, false),
+   (i.processo_b, false),
+   (i.processo_b_sigiloso, true)
+ ) as p(pid, sigiloso);
+
+grant select on cenario.processos_todos to anon, authenticated;
