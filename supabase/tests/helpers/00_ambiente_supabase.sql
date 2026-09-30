@@ -89,3 +89,25 @@ as $$
     (nullif(current_setting('request.jwt.claims', true), '')::jsonb ->> 'role')
   )
 $$;
+
+-- ---------------------------------------------------------------------------
+-- DEFAULT PRIVILEGES — a parte do ambiente Supabase que faltava
+-- ---------------------------------------------------------------------------
+--
+-- Acrescentado depois de o schema ir para um projeto Supabase de verdade e a
+-- anon key alcançar tabelas que, aqui, ela não alcançava. A causa: o Supabase
+-- define ALTER DEFAULT PRIVILEGES concedendo acesso a anon, authenticated e
+-- service_role em TODA tabela criada depois em `public`. Sem reproduzir isso,
+-- a suíte afirmava uma proteção que o ambiente real não tinha.
+--
+-- É o caso exato que justifica emular o ambiente em vez de supor: o teste
+-- estava certo sobre o que verificava e errado sobre onde ia rodar. Com as
+-- linhas abaixo, qualquer tabela nova nasce com os grants que o Supabase dá —
+-- e as migrations têm que revogar o que não querem, explicitamente, como
+-- fariam em produção.
+alter default privileges in schema public
+  grant all on tables to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on sequences to anon, authenticated, service_role;
+alter default privileges in schema public
+  grant all on functions to anon, authenticated, service_role;
