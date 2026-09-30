@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useState } from 'react';
-import { supabase } from '../banco/cliente';
+import { confirmarPrazo, listarPrazosSugeridos } from '../banco/dados';
 import { podeConfirmarPrazo, useSessao } from '../banco/sessao';
 import { diasCorridosAte, formatarData, type PrazoDaFila } from '../banco/tipos';
 
@@ -29,24 +29,9 @@ export function FilaDePrazos() {
   const carregar = useCallback(async () => {
     setCarregando(true);
     setErro(null);
-    // O RLS já recorta por escritório e por papel — não há filtro de
-    // escritorio_id nesta consulta, e não deve haver: repetir aqui o recorte
-    // que o banco faz criaria uma segunda regra para divergir da primeira.
-    // O filtro por status é o que define a fila.
-    const { data, error } = await supabase
-      .from('prazos')
-      .select(`
-        id, processo_id, status, contagem, dias, em_dobro, fundamento_dobro,
-        data_termo_inicial, data_inicio_contagem, data_vencimento_sugerida,
-        data_vencimento_confirmada, fundamento_legal, observacao,
-        memoria_calculo, responsavel_id, criado_em,
-        processos ( numero_cnj, numero_pasta, tribunal )
-      `)
-      .eq('status', 'sugerido')
-      .order('data_vencimento_sugerida', { ascending: true, nullsFirst: false });
-
-    if (error) setErro(error.message);
-    else setPrazos((data ?? []) as unknown as PrazoDaFila[]);
+    const { dados, erro: falha } = await listarPrazosSugeridos();
+    if (falha) setErro(falha);
+    else setPrazos(dados);
     setCarregando(false);
   }, []);
 
@@ -62,25 +47,12 @@ export function FilaDePrazos() {
     // permite medir depois com que frequência o cálculo erra, e em que tipo de
     // ato. A sugestão original fica intacta no banco — o trigger impede
     // sobrescrevê-la justamente para preservar essa comparação.
-    const status = dataFinal === prazo.data_vencimento_sugerida
-      ? 'confirmado' : 'ajustado';
-
-    const { error } = await supabase
-      .from('prazos')
-      .update({
-        status,
-        // O banco exige que seja quem está logado; mandar outro id é recusado
-        // pelo trigger. Mandamos o próprio para que a trilha aponte para a
-        // pessoa certa.
-        confirmado_por: usuario.id,
-        confirmado_em: new Date().toISOString(),
-        data_vencimento_confirmada: dataFinal,
-      })
-      .eq('id', prazo.id);
-
+    const { status, erro: falha } = await confirmarPrazo(
+      prazo.id, dataFinal, prazo.data_vencimento_sugerida, usuario.id,
+    );
     setSalvando(null);
-    if (error) {
-      setErro(error.message);
+    if (falha) {
+      setErro(falha);
       return;
     }
     setAjustando(null);
@@ -177,9 +149,11 @@ export function FilaDePrazos() {
                   </span>
                   {dias !== null && (
                     <span className="block text-sm text-slate-600">
-                      {dias < 0 ? `${Math.abs(dias)} dias atrás`
+                      {dias < 0
+                        ? `${Math.abs(dias)} ${Math.abs(dias) === 1
+                            ? 'dia atrás' : 'dias atrás'}`
                         : dias === 0 ? 'hoje'
-                        : `em ${dias} dias`}
+                        : `em ${dias} ${dias === 1 ? 'dia' : 'dias'}`}
                     </span>
                   )}
                 </div>

@@ -1,5 +1,6 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useSessao } from '../banco/sessao';
+import { MODO_DEMO } from '../banco/demonstracao';
 
 const PAPEL_LEGIVEL: Record<string, string> = {
   advogado_responsavel: 'Advogado responsável',
@@ -33,6 +34,17 @@ export function Layout() {
       >
         Pular para o conteúdo
       </a>
+
+      {/* Faixa permanente, não um aviso que se fecha. Quem estiver mostrando
+          a tela para um cliente precisa que fique claro o tempo todo que
+          aquilo é ficção — um print de demonstração circulando como se fosse
+          o sistema em produção é o tipo de mal-entendido difícil de desfazer. */}
+      {MODO_DEMO && (
+        <p className="bg-amber-400 px-4 py-2 text-center text-sm
+                      font-semibold text-amber-950">
+          Modo demonstração · dados fictícios · nenhum banco conectado
+        </p>
+      )}
 
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">

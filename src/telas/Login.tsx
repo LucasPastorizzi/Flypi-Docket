@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { supabase } from '../banco/cliente';
+import { CONTAS_DEMO, MODO_DEMO, entrarComoDemo } from '../banco/demonstracao';
 
 export function Login() {
   const [email, setEmail] = useState('');
@@ -31,6 +32,44 @@ export function Login() {
         <p className="mt-1 text-sm text-slate-600">
           Acesso da equipe do escritório.
         </p>
+
+        {MODO_DEMO && (
+          <section
+            aria-labelledby="titulo-demo"
+            className="mt-6 rounded-lg border-2 border-amber-400 bg-amber-50 p-4"
+          >
+            <h2 id="titulo-demo" className="font-semibold text-amber-900">
+              Modo demonstração
+            </h2>
+            <p className="mt-1 text-sm text-amber-900">
+              Dados fictícios, nenhum banco conectado. Escolha um perfil para
+              ver como cada papel enxerga o sistema — é a diferença de
+              visibilidade que o RLS faz no produto de verdade.
+            </p>
+            <ul className="mt-3 space-y-2">
+              {CONTAS_DEMO.map((conta) => (
+                <li key={conta.id}>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      entrarComoDemo(conta.id);
+                      window.dispatchEvent(new Event('flypi-demo-mudou'));
+                    }}
+                    className="w-full rounded-md border border-amber-300
+                               bg-white px-3 py-2 text-left hover:bg-amber-100"
+                  >
+                    <span className="block font-medium text-slate-900">
+                      {conta.nome}
+                    </span>
+                    <span className="block text-sm text-slate-600">
+                      {conta.descricao}
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <form onSubmit={entrar} className="mt-8 space-y-4">
           <div>

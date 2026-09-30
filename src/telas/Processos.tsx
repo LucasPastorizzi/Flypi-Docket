@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { supabase } from '../banco/cliente';
+import { listarProcessos } from '../banco/dados';
 import { useSessao } from '../banco/sessao';
 import { formatarDinheiro, type Processo } from '../banco/tipos';
 
@@ -22,14 +22,10 @@ export function Processos() {
   useEffect(() => {
     let ativo = true;
     void (async () => {
-      const { data, error } = await supabase
-        .from('processos')
-        .select(`id, numero_cnj, numero_pasta, tribunal, comarca, situacao,
-                 segredo_justica, valor_causa, advogado_responsavel_id`)
-        .order('criado_em', { ascending: false });
+      const { dados, erro: falha } = await listarProcessos();
       if (!ativo) return;
-      if (error) setErro(error.message);
-      else setProcessos((data ?? []) as Processo[]);
+      if (falha) setErro(falha);
+      else setProcessos(dados);
       setCarregando(false);
     })();
     return () => { ativo = false; };
