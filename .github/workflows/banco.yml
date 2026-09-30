@@ -1,0 +1,50 @@
+# Roda a suíte de banco em todo push e PR.
+#
+# Sem Docker de propósito: o runner do GitHub já oferece um serviço de
+# Postgres, e depender de `supabase start` traria uma subida de container de
+# minutos a cada execução. A suíte roda contra um Postgres nu porque o
+# ambiente Supabase de que ela depende — os três roles e auth.uid() — está
+# emulado em supabase/tests/helpers, com a implementação real de auth.uid().
+name: banco
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  rls:
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        # Mesma major do Postgres que o Supabase serve hoje. Divergir de major
+        # aqui esconderia diferença de comportamento de RLS entre versões, que
+        # é justamente o que esta suíte existe para pegar.
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Instalar cliente do Postgres e compilar pgTAP
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y postgresql-client postgresql-server-dev-17 make
+          git clone --depth 1 https://github.com/theory/pgtap.git /tmp/pgtap
+          make -C /tmp/pgtap
+          sudo make -C /tmp/pgtap install
+
+      - name: Rodar a suíte
+        env:
+          PGHOST: localhost
+          PGPORT: '5432'
+          PGUSER: postgres
+          PGPASSWORD: postgres
+        run: ./scripts/db-test.sh
