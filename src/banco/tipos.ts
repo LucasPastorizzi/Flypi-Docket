@@ -107,3 +107,183 @@ export function diasCorridosAte(data: string | null): number | null {
   const hojeSemHora = new Date(hoje.getFullYear(), hoje.getMonth(), hoje.getDate());
   return Math.round((alvo.getTime() - hojeSemHora.getTime()) / 86_400_000);
 }
+
+// --- entidades das telas de cadastro ---------------------------------------
+
+export type TipoPessoa = 'fisica' | 'juridica';
+export type Polo = 'ativo' | 'passivo' | 'terceiro';
+export type StatusTarefa = 'aberta' | 'em_andamento' | 'concluida' | 'cancelada';
+export type EfeitoFeriado = 'dia_nao_util' | 'suspende_prazo';
+export type Abrangencia = 'nacional' | 'estadual' | 'municipal' | 'tribunal';
+
+export interface Cliente {
+  id: string;
+  tipo_pessoa: TipoPessoa;
+  nome: string;
+  nome_social: string | null;
+  documento: string | null;
+  email: string | null;
+  telefone: string | null;
+  cep: string | null;
+  logradouro: string | null;
+  numero: string | null;
+  complemento: string | null;
+  bairro: string | null;
+  municipio: string | null;
+  uf: string | null;
+  observacoes: string | null;
+}
+
+export interface Parte {
+  id: string;
+  processo_id: string;
+  polo: Polo;
+  qualificacao: string;
+  nome: string;
+  documento: string | null;
+  cliente_id: string | null;
+}
+
+export interface Tarefa {
+  id: string;
+  processo_id: string | null;
+  prazo_id: string | null;
+  titulo: string;
+  descricao: string | null;
+  responsavel_id: string | null;
+  status: StatusTarefa;
+  data_limite: string | null;
+  concluida_em: string | null;
+}
+
+export interface MembroEquipe {
+  id: string;
+  processo_id: string;
+  usuario_id: string;
+  incluido_em: string;
+  usuarios: { nome: string; papel: PapelUsuario } | null;
+}
+
+export interface Tribunal {
+  sigla: string;
+  nome: string;
+  segmento: string;
+  uf: string | null;
+}
+
+export interface FeriadoEscritorio {
+  id: string;
+  abrangencia: Abrangencia;
+  uf: string | null;
+  municipio: string | null;
+  tribunal: string | null;
+  data_inicio: string;
+  data_fim: string;
+  efeito: EfeitoFeriado;
+  descricao: string;
+  fundamento: string;
+  fonte_url: string | null;
+}
+
+export interface MembroDoEscritorio {
+  id: string;
+  nome: string;
+  email: string;
+  papel: PapelUsuario;
+  admin_escritorio: boolean;
+  ativo: boolean;
+}
+
+export interface LinhaAuditoria {
+  id: number;
+  ator_id: string | null;
+  ator_tipo: 'equipe' | 'portal' | 'servico';
+  acao: string;
+  entidade: string;
+  registro_id: string | null;
+  processo_id: string | null;
+  dados_depois: { resultado?: string; sigiloso?: boolean } | null;
+  ip: string | null;
+  ocorrido_em: string;
+}
+
+export interface Publicacao {
+  id: string;
+  fonte: string;
+  numero_cnj: string | null;
+  numero_processo_bruto: string | null;
+  data_publicacao: string | null;
+  data_divulgacao: string | null;
+  status: string;
+  processo_id: string | null;
+  tipo_ato: string | null;
+  erro_ultimo: string | null;
+  recebida_em: string;
+  payload: unknown;
+}
+
+export interface ProcessoDetalhado extends Processo {
+  numero_pasta: string | null;
+  orgao_julgador: string | null;
+  uf: string | null;
+  classe: string | null;
+  assunto: string | null;
+  data_distribuicao: string | null;
+  criado_em: string;
+}
+
+export const PAPEL_LEGIVEL: Record<PapelUsuario, string> = {
+  advogado_responsavel: 'Advogado responsável',
+  advogado_associado: 'Advogado associado',
+  estagiario: 'Estagiário',
+  secretaria: 'Secretaria',
+};
+
+export const SITUACAO_LEGIVEL: Record<SituacaoProcesso, string> = {
+  ativo: 'Ativo', suspenso: 'Suspenso', arquivado: 'Arquivado',
+  baixado: 'Baixado', encerrado: 'Encerrado',
+};
+
+export const POLO_LEGIVEL: Record<Polo, string> = {
+  ativo: 'Polo ativo', passivo: 'Polo passivo', terceiro: 'Terceiro',
+};
+
+export const STATUS_TAREFA_LEGIVEL: Record<StatusTarefa, string> = {
+  aberta: 'Aberta', em_andamento: 'Em andamento',
+  concluida: 'Concluída', cancelada: 'Cancelada',
+};
+
+// Só dígitos, que é como o banco guarda. A máscara é apresentação — o domínio
+// documento_fiscal recusa qualquer coisa que não sejam 11 ou 14 dígitos.
+export function apenasDigitos(texto: string): string {
+  return texto.replace(/\D/g, '');
+}
+
+export function formatarDocumento(doc: string | null): string {
+  if (!doc) return '—';
+  if (doc.length === 11) {
+    return `${doc.slice(0, 3)}.${doc.slice(3, 6)}.${doc.slice(6, 9)}-${doc.slice(9)}`;
+  }
+  if (doc.length === 14) {
+    return `${doc.slice(0, 2)}.${doc.slice(2, 5)}.${doc.slice(5, 8)}`
+         + `/${doc.slice(8, 12)}-${doc.slice(12)}`;
+  }
+  return doc;
+}
+
+// NNNNNNN-DD.AAAA.J.TR.OOOO (Res. CNJ 65/2008). O banco guarda os 20 dígitos
+// sem pontuação, para casar com o que a API do CNJ devolve sem normalizar dos
+// dois lados a cada consulta.
+export function formatarCnj(numero: string | null): string {
+  if (!numero || numero.length !== 20) return numero ?? '—';
+  return `${numero.slice(0, 7)}-${numero.slice(7, 9)}.${numero.slice(9, 13)}`
+       + `.${numero.slice(13, 14)}.${numero.slice(14, 16)}.${numero.slice(16)}`;
+}
+
+export function formatarInstante(instante: string | null): string {
+  if (!instante) return '—';
+  return new Date(instante).toLocaleString('pt-BR', {
+    day: '2-digit', month: '2-digit', year: 'numeric',
+    hour: '2-digit', minute: '2-digit',
+  });
+}

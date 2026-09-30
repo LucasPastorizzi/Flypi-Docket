@@ -3,9 +3,6 @@ import {
 } from 'react';
 import type { Session } from '@supabase/supabase-js';
 import { supabase } from './cliente';
-import {
-  MODO_DEMO, sairDoDemo, usuarioDemoAtual,
-} from './demonstracao';
 import type { UsuarioLogado } from './tipos';
 
 // Duas coisas distintas, e a distinção importa: a SESSÃO é do GoTrue (quem
@@ -26,44 +23,7 @@ interface Contexto {
 const ContextoSessao = createContext<Contexto | null>(null);
 
 export function ProvedorDeSessao({ children }: { children: ReactNode }) {
-  // Em modo demonstração não há GoTrue, não há token e não há rede: o
-  // "usuário logado" é uma escolha de perfil guardada em sessionStorage. O
-  // ramo fica inteiro aqui, no começo, em vez de espalhado em condicionais —
-  // assim dá para ler o provedor real sem tropeçar nele.
-  if (MODO_DEMO) return <ProvedorDemo>{children}</ProvedorDemo>;
 
-  return <ProvedorReal>{children}</ProvedorReal>;
-}
-
-function ProvedorDemo({ children }: { children: ReactNode }) {
-  const [usuario, setUsuario] = useState<UsuarioLogado | null>(usuarioDemoAtual);
-
-  // Reage ao login de demonstração feito na tela de Login.
-  useEffect(() => {
-    const aoMudar = () => setUsuario(usuarioDemoAtual());
-    window.addEventListener('flypi-demo-mudou', aoMudar);
-    return () => window.removeEventListener('flypi-demo-mudou', aoMudar);
-  }, []);
-
-  const valor = useMemo<Contexto>(() => ({
-    // Sessão falsa só para o App saber que há alguém logado. Nenhum token
-    // real existe neste modo.
-    sessao: usuario ? ({ user: { id: usuario.id } } as unknown as Session) : null,
-    usuario,
-    carregando: false,
-    semVinculo: false,
-    sair: async () => {
-      sairDoDemo();
-      setUsuario(null);
-    },
-  }), [usuario]);
-
-  return (
-    <ContextoSessao.Provider value={valor}>{children}</ContextoSessao.Provider>
-  );
-}
-
-function ProvedorReal({ children }: { children: ReactNode }) {
   const [sessao, setSessao] = useState<Session | null>(null);
   const [usuario, setUsuario] = useState<UsuarioLogado | null>(null);
   const [carregando, setCarregando] = useState(true);

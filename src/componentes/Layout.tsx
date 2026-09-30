@@ -1,16 +1,18 @@
 import { NavLink, Outlet } from 'react-router-dom';
 import { useSessao } from '../banco/sessao';
-import { MODO_DEMO } from '../banco/demonstracao';
-
-const PAPEL_LEGIVEL: Record<string, string> = {
-  advogado_responsavel: 'Advogado responsável',
-  advogado_associado: 'Advogado associado',
-  estagiario: 'Estagiário',
-  secretaria: 'Secretaria',
-};
+import { PAPEL_LEGIVEL } from '../banco/tipos';
 
 export function Layout() {
   const { usuario, sair } = useSessao();
+
+  // Espelha o recorte das policies. É só uma dica de navegação: quem montar a
+  // URL à mão chega na tela, e lá o banco devolve vazio — que é o
+  // comportamento certo. O menu evita o passeio inútil, não é a proteção.
+  const enxergaTudo = usuario?.papel === 'advogado_responsavel'
+                   || usuario?.papel === 'secretaria'
+                   || usuario?.admin_escritorio === true;
+  const podeAdministrar = usuario?.admin_escritorio === true
+                       || usuario?.papel === 'advogado_responsavel';
 
   const estiloAba = ({ isActive }: { isActive: boolean }) =>
     [
@@ -35,24 +37,29 @@ export function Layout() {
         Pular para o conteúdo
       </a>
 
-      {/* Faixa permanente, não um aviso que se fecha. Quem estiver mostrando
-          a tela para um cliente precisa que fique claro o tempo todo que
-          aquilo é ficção — um print de demonstração circulando como se fosse
-          o sistema em produção é o tipo de mal-entendido difícil de desfazer. */}
-      {MODO_DEMO && (
-        <p className="bg-amber-400 px-4 py-2 text-center text-sm
-                      font-semibold text-amber-950">
-          Modo demonstração · dados fictícios · nenhum banco conectado
-        </p>
-      )}
-
       <header className="border-b border-slate-200 bg-white">
         <div className="mx-auto flex max-w-6xl items-center gap-4 px-4 py-3">
           <span className="font-semibold text-slate-900">Flypi Docket</span>
 
-          <nav aria-label="Seções" className="flex gap-1">
+          {/* A ordem não é alfabética: prazos primeiro porque é o que tem
+              consequência se ficar sem olhar. As seções de administração
+              aparecem só para quem pode usá-las — item de menu que leva a uma
+              tela vazia por falta de permissão ensina o usuário a ignorar o
+              menu. */}
+          <nav aria-label="Seções" className="flex flex-wrap gap-1">
             <NavLink to="/prazos" className={estiloAba}>Prazos</NavLink>
             <NavLink to="/processos" className={estiloAba}>Processos</NavLink>
+            <NavLink to="/tarefas" className={estiloAba}>Tarefas</NavLink>
+            {enxergaTudo && (
+              <NavLink to="/clientes" className={estiloAba}>Clientes</NavLink>
+            )}
+            <NavLink to="/calendario" className={estiloAba}>Calendário</NavLink>
+            {podeAdministrar && (
+              <>
+                <NavLink to="/equipe" className={estiloAba}>Equipe</NavLink>
+                <NavLink to="/auditoria" className={estiloAba}>Auditoria</NavLink>
+              </>
+            )}
           </nav>
 
           <div className="ml-auto flex items-center gap-3">
