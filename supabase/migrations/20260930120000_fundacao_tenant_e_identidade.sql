@@ -357,7 +357,7 @@ create trigger oabs_usuario_escritorio_imutavel before update on oabs_usuario
 create or replace function app.usuarios_bloquear_escalada()
 returns trigger
 language plpgsql
-set search_path = 'public'
+set search_path = ''
 as $$
 begin
   if app.eh_admin() then
@@ -383,9 +383,19 @@ create trigger usuarios_sem_escalada before update on usuarios
 -- coluna é redundante para manter a policy simples (ver comentário na
 -- tabela); a redundância só é segura se alguém garantir a coerência, e esse
 -- alguém é o banco, não a aplicação.
+-- NOTA QUE VALE PARA TODO TRIGGER DE INTEGRIDADE DESTE SCHEMA:
+-- SECURITY DEFINER não é opcional aqui. Sem ele, o SELECT de verificação passa
+-- pela RLS de quem está escrevendo, e a mesma invariante passa a ser checada
+-- contra dados diferentes conforme o usuário. Duas consequências, ambas ruins:
+-- o admin que insere linha filha em processo que ele não lê recebe erro
+-- espúrio, e — pior — uma verificação que deveria achar linha de OUTRO
+-- escritório não a acha, e a invariante deixa de valer exatamente no caso
+-- cross-tenant que ela existe para cobrir. Integridade é sobre o que é fato no
+-- banco; autorização é trabalho da policy.
 create or replace function app.oab_coerente_com_usuario()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 declare

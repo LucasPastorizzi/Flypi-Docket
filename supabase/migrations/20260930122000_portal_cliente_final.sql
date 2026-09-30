@@ -155,6 +155,7 @@ create trigger acessos_portal_tenant_processo
 create or replace function app.identidade_exclusiva()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 begin
@@ -197,6 +198,7 @@ create trigger usuarios_identidade_exclusiva
 create or replace function app.acesso_portal_exige_parte()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 begin
@@ -328,7 +330,7 @@ create policy usuarios_portal_atualiza_se_mesmo on usuarios_portal
 create or replace function app.portal_bloquear_escalada()
 returns trigger
 language plpgsql
-set search_path = 'public'
+set search_path = ''
 as $$
 begin
   if app.eh_admin() then

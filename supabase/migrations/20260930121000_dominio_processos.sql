@@ -308,9 +308,19 @@ create trigger processos_equipe_escritorio_imutavel before update on processos_e
 -- garante que o pai existe, não que ele seja do mesmo tenant — e uma parte
 -- pendurada em processo de outro escritório é vazamento por composição: a
 -- policy da filha autoriza pela própria coluna e entrega dado alheio.
+-- NOTA QUE VALE PARA TODO TRIGGER DE INTEGRIDADE DESTE SCHEMA:
+-- SECURITY DEFINER não é opcional aqui. Sem ele, o SELECT de verificação passa
+-- pela RLS de quem está escrevendo, e a mesma invariante passa a ser checada
+-- contra dados diferentes conforme o usuário. Duas consequências, ambas ruins:
+-- o admin que insere linha filha em processo que ele não lê recebe erro
+-- espúrio, e — pior — uma verificação que deveria achar linha de OUTRO
+-- escritório não a acha, e a invariante deixa de valer exatamente no caso
+-- cross-tenant que ela existe para cobrir. Integridade é sobre o que é fato no
+-- banco; autorização é trabalho da policy.
 create or replace function app.coerencia_tenant_filho()
 returns trigger
 language plpgsql
+security definer
 set search_path = ''
 as $$
 declare
