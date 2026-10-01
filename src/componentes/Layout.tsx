@@ -47,7 +47,8 @@ export function Layout() {
               tela vazia por falta de permissão ensina o usuário a ignorar o
               menu. */}
           <nav aria-label="Seções" className="flex flex-wrap gap-1">
-            <NavLink to="/prazos" className={estiloAba}>Prazos</NavLink>
+            <NavLink to="/pauta" className={estiloAba}>Pauta</NavLink>
+            <NavLink to="/prazos" className={estiloAba}>A confirmar</NavLink>
             <NavLink to="/processos" className={estiloAba}>Processos</NavLink>
             <NavLink to="/tarefas" className={estiloAba}>Tarefas</NavLink>
             {enxergaTudo && (

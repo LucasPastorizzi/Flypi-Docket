@@ -4,6 +4,7 @@ import { Layout } from './componentes/Layout';
 import { Botao } from './componentes/Formulario';
 import { Login } from './telas/Login';
 import { FilaDePrazos } from './telas/FilaDePrazos';
+import { Agenda } from './telas/Agenda';
 import { Processos } from './telas/Processos';
 import { ProcessoDetalhe } from './telas/ProcessoDetalhe';
 import { ProcessoFormulario } from './telas/ProcessoFormulario';
@@ -54,6 +55,7 @@ export function App() {
   return (
     <Routes>
       <Route element={<Layout />}>
+        <Route path="/pauta" element={<Agenda />} />
         <Route path="/prazos" element={<FilaDePrazos />} />
 
         <Route path="/processos" element={<Processos />} />
@@ -75,9 +77,10 @@ export function App() {
         <Route path="/equipe" element={<Equipe />} />
         <Route path="/auditoria" element={<Auditoria />} />
 
-        {/* A fila de confirmação é a primeira tela de propósito: é o que tem
-            consequência se ficar sem olhar. */}
-        <Route path="*" element={<Navigate to="/prazos" replace />} />
+        {/* A pauta é a primeira tela: é a pergunta que o advogado faz ao
+            abrir o sistema — o que vence agora. A fila de confirmação vem
+            logo em seguida, e as duas são separadas de propósito. */}
+        <Route path="*" element={<Navigate to="/pauta" replace />} />
       </Route>
     </Routes>
   );

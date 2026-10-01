@@ -13,6 +13,7 @@ import {
   type ProcessoDetalhado, type Tarefa,
 } from '../banco/tipos';
 import { Botao, Carregando, Erro, Sucesso, Vazio } from '../componentes/Formulario';
+import { AcessoDoPortal } from '../componentes/AcessoDoPortal';
 
 export function ProcessoDetalhe() {
   const { id = '' } = useParams();
@@ -332,6 +333,8 @@ export function ProcessoDetalhe() {
           </ul>
         )}
       </section>
+
+      <AcessoDoPortal processoId={id} partes={partes} />
 
       {/* --- equipe --- */}
       <section aria-labelledby="t-equipe" className="mt-8 mb-10">

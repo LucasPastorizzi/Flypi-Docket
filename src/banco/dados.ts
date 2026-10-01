@@ -408,3 +408,105 @@ export async function listarDocumentosDoPortal(processoId: string) {
     erro: error?.message ?? null,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Concessão de acesso ao portal
+// ---------------------------------------------------------------------------
+
+export interface AcessoPortal {
+  id: string;
+  cliente_id: string;
+  processo_id: string;
+  concedido_em: string;
+  revogado_em: string | null;
+  observacao: string | null;
+  clientes: { nome: string } | null;
+}
+
+export async function listarAcessosDoProcesso(processoId: string) {
+  const { data, error } = await supabase
+    .from('acessos_portal')
+    .select(`id, cliente_id, processo_id, concedido_em, revogado_em,
+             observacao, clientes ( nome )`)
+    .eq('processo_id', processoId)
+    .order('concedido_em', { ascending: false });
+  return {
+    dados: (data ?? []) as unknown as AcessoPortal[],
+    erro: error?.message ?? null,
+  };
+}
+
+export async function concederAcessoPortal(
+  escritorioId: string, clienteId: string, processoId: string,
+  porQuem: string, observacao: string,
+) {
+  // concedido_por tem que ser quem está logado — a policy exige. Registrar a
+  // concessão no nome de um colega faria a trilha apontar para a pessoa
+  // errada justamente no registro que existe para atribuir responsabilidade.
+  const { error } = await supabase.from('acessos_portal').insert({
+    escritorio_id: escritorioId, cliente_id: clienteId,
+    processo_id: processoId, concedido_por: porQuem,
+    observacao: observacao || null,
+  });
+  return { erro: error?.message ?? null };
+}
+
+export async function revogarAcessoPortal(id: string, porQuem: string) {
+  // Revogação por data, não por DELETE: a linha revogada é a prova de que o
+  // acesso existiu entre duas datas — é ela que responde "quem podia ver este
+  // processo em março".
+  const { error } = await supabase.from('acessos_portal').update({
+    revogado_em: new Date().toISOString(), revogado_por: porQuem,
+  }).eq('id', id);
+  return { erro: error?.message ?? null };
+}
+
+// Os logins de portal de um cliente. Serve para a tela avisar quando há
+// concessão sem ninguém para usá-la — caso em que o cliente não recebe nada e
+// o escritório acha que liberou.
+export async function listarLoginsDoPortal(clienteId: string) {
+  const { data, error } = await supabase
+    .from('usuarios_portal')
+    .select('id, nome, email, ativo')
+    .eq('cliente_id', clienteId);
+  return {
+    dados: (data ?? []) as Array<{
+      id: string; nome: string; email: string; ativo: boolean;
+    }>,
+    erro: error?.message ?? null,
+  };
+}
+
+// ---------------------------------------------------------------------------
+// Agenda — o que já é compromisso
+// ---------------------------------------------------------------------------
+
+// Só o que passou por confirmação humana.
+//
+// `eh_compromisso` é coluna gerada no banco, e a consulta filtra por ela em
+// vez de listar os status à mão: a definição de "compromisso" mora no schema,
+// e repetir aqui a lista de status faria a agenda divergir dele no dia em que
+// um status novo aparecesse. Sugestão pendente é outra lista — misturar as
+// duas é mostrar como compromisso o que ninguém conferiu.
+export async function listarAgenda() {
+  const { data, error } = await supabase
+    .from('prazos')
+    .select(`id, processo_id, status, contagem, dias, em_dobro,
+             fundamento_dobro, data_termo_inicial, data_inicio_contagem,
+             data_vencimento_sugerida, data_vencimento_confirmada,
+             fundamento_legal, observacao, memoria_calculo, responsavel_id,
+             criado_em, processos ( numero_cnj, numero_pasta, tribunal )`)
+    .eq('eh_compromisso', true)
+    .in('status', ['confirmado', 'ajustado'])
+    .order('data_vencimento_confirmada', { ascending: true });
+  return {
+    dados: (data ?? []) as unknown as PrazoDaFila[],
+    erro: error?.message ?? null,
+  };
+}
+
+export async function marcarPrazoCumprido(id: string) {
+  const { error } = await supabase.from('prazos')
+    .update({ status: 'cumprido' }).eq('id', id);
+  return { erro: error?.message ?? null };
+}
