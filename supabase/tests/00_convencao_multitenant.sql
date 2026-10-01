@@ -16,7 +16,7 @@
 
 begin;
 
-select plan(7);
+select plan(9);
 
 -- As únicas tabelas de `public` que podem não ter escritorio_id, com o motivo.
 -- Acrescentar uma linha aqui é decisão de arquitetura, e é para doer um pouco.
@@ -149,6 +149,38 @@ select is_empty($$
      and tp.privilege_type = 'DELETE'
      and tp.grantee in ('anon', 'authenticated')
 $$, 'nenhuma tabela concede DELETE à aplicação: exclusão é lógica');
+
+-- As duas asserções abaixo verificam a REGRA, e não só o efeito dela. Os
+-- testes acima olham os privilégios das tabelas que existem; estes olham os
+-- default privileges, que decidem com o que a PRÓXIMA tabela vai nascer.
+--
+-- Foram escritos depois de o schema ir para um projeto Supabase de verdade e a
+-- anon key alcançar quatro tabelas que, no ambiente de teste, ela não
+-- alcançava. O Supabase concede tudo a anon e authenticated por padrão em toda
+-- tabela nova de `public`, e um REVOKE numa migration só vale para as tabelas
+-- que já existem — as seguintes voltam a nascer abertas.
+select is_empty($$
+  select pg_get_userbyid(d.defaclrole) || ' -> ' || acl::text as violacao
+    from pg_default_acl d
+    join pg_namespace n on n.oid = d.defaclnamespace
+   cross join lateral unnest(d.defaclacl) acl
+   where n.nspname in ('public', 'app')
+     and acl::text like 'anon=%'
+$$, 'nenhum default privilege concede nada a anon');
+
+-- authenticated pode nascer com leitura; o que não pode é nascer com DELETE,
+-- porque exclusão é lógica em todo o sistema e o que não foi concedido não
+-- depende de ninguém lembrar de não escrever DELETE.
+select is_empty($$
+  select pg_get_userbyid(d.defaclrole) || ' -> ' || acl::text as violacao
+    from pg_default_acl d
+    join pg_namespace n on n.oid = d.defaclnamespace
+   cross join lateral unnest(d.defaclacl) acl
+   where n.nspname in ('public', 'app')
+     and acl::text like 'authenticated=%'
+     -- 'd' é DELETE na notação de ACL do Postgres.
+     and split_part(split_part(acl::text, '=', 2), '/', 1) like '%d%'
+$$, 'nenhum default privilege concede DELETE a authenticated');
 
 select * from finish();
 rollback;

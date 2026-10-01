@@ -14,7 +14,7 @@
 # A suíte não precisa do stack Supabase porque o que ela consome dele — os três
 # roles e auth.uid() — está emulado em supabase/tests/helpers, com a
 # implementação real de auth.uid() e não com um atalho de teste.
-name: banco
+name: verificacao
 
 on:
   push:
@@ -111,3 +111,32 @@ jobs:
             exit 1
           fi
           tail -15 /tmp/suite.log
+
+  # O job de banco prova as policies; este prova que o cliente compila contra
+  # os tipos do schema. São falhas de natureza diferente e precisam das duas
+  # portas: uma coluna renomeada no banco passa pelo pgTAP e quebra aqui.
+  front:
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: npm
+
+      # `npm ci` e não `npm install`: instala exatamente o que está no
+      # package-lock, sem atualizar nada por conta própria. Build que resolve
+      # dependência de forma diferente a cada execução não serve de prova.
+      - run: npm ci
+
+      # O build precisa das variáveis, mas não precisa que sejam reais: o que
+      # se verifica aqui é compilação, não conexão. Valores de fachada deixam
+      # claro que nenhuma credencial de verdade mora no CI.
+      - name: Verificar tipos e compilar
+        env:
+          VITE_SUPABASE_URL: https://verificacao.invalid
+          VITE_SUPABASE_ANON_KEY: chave-de-fachada-do-ci
+        run: |
+          npx tsc --noEmit
+          npx vite build
