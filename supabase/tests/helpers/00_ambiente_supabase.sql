@@ -111,3 +111,56 @@ alter default privileges in schema public
   grant all on sequences to anon, authenticated, service_role;
 alter default privileges in schema public
   grant all on functions to anon, authenticated, service_role;
+
+-- ---------------------------------------------------------------------------
+-- Storage
+-- ---------------------------------------------------------------------------
+--
+-- O Storage do Supabase é outra camada de RLS, sobre `storage.objects`, e ela
+-- não herda nada das policies de `public`. Emulado aqui pelo mesmo motivo que
+-- o resto: sem isto, uma policy de bucket escrita errado passaria despercebida
+-- na suíte e só apareceria no projeto real — que foi exatamente como o
+-- problema dos default privileges nos pegou.
+--
+-- Reduzido ao que as nossas policies consomem: o id do bucket, o caminho do
+-- objeto e a função que parte o caminho em segmentos.
+create schema if not exists storage;
+
+create table if not exists storage.buckets (
+  id text primary key,
+  name text not null,
+  public boolean not null default false,
+  created_at timestamptz not null default now()
+);
+
+create table if not exists storage.objects (
+  id uuid primary key default gen_random_uuid(),
+  bucket_id text references storage.buckets(id),
+  -- O caminho completo dentro do bucket. É dele que as policies extraem o
+  -- escritório dono do arquivo.
+  name text not null,
+  owner uuid,
+  created_at timestamptz not null default now(),
+  metadata jsonb
+);
+
+alter table storage.objects enable row level security;
+
+-- Implementação do Supabase: parte o caminho em segmentos, descartando o
+-- último (o nome do arquivo).
+create or replace function storage.foldername(name text)
+returns text[]
+language plpgsql
+immutable
+as $$
+declare
+  partes text[];
+begin
+  partes := string_to_array(name, '/');
+  return partes[1:array_length(partes, 1) - 1];
+end;
+$$;
+
+grant usage on schema storage to anon, authenticated, service_role;
+grant select, insert, update on storage.objects to authenticated;
+grant select on storage.buckets to authenticated;

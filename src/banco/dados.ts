@@ -510,3 +510,94 @@ export async function marcarPrazoCumprido(id: string) {
     .update({ status: 'cumprido' }).eq('id', id);
   return { erro: error?.message ?? null };
 }
+
+// ---------------------------------------------------------------------------
+// Documentos
+// ---------------------------------------------------------------------------
+
+export interface Documento {
+  id: string;
+  processo_id: string | null;
+  cliente_id: string | null;
+  bucket: string;
+  caminho: string;
+  nome_original: string;
+  mime: string | null;
+  tamanho_bytes: number | null;
+  sigiloso: boolean;
+  visivel_portal: boolean;
+  enviado_por: string | null;
+  criado_em: string;
+}
+
+export async function listarDocumentos(processoId: string) {
+  const { data, error } = await supabase
+    .from('documentos')
+    .select(`id, processo_id, cliente_id, bucket, caminho, nome_original, mime,
+             tamanho_bytes, sigiloso, visivel_portal, enviado_por, criado_em`)
+    .eq('processo_id', processoId)
+    .order('criado_em', { ascending: false });
+  return { dados: (data ?? []) as Documento[], erro: error?.message ?? null };
+}
+
+// Sobe o arquivo e grava o metadado, nesta ordem.
+//
+// O caminho começa pelo escritório porque é dele que a policy do Storage
+// extrai o tenant — no instante do upload ainda não há linha em `documentos`
+// para consultar. O nome é sorteado em vez de usar o do arquivo: nome original
+// pode conter caractere que o Storage recusa, pode colidir com outro envio, e
+// pode revelar conteúdo a quem só vê o caminho ("acordo-sigiloso.pdf").
+export async function enviarDocumento(
+  arquivo: File, escritorioId: string, processoId: string, enviadoPor: string,
+  opcoes: { sigiloso: boolean; visivelPortal: boolean },
+) {
+  const extensao = arquivo.name.includes('.')
+    ? arquivo.name.slice(arquivo.name.lastIndexOf('.')) : '';
+  const caminho = `${escritorioId}/${processoId}/${crypto.randomUUID()}${extensao}`;
+
+  // O objeto de opções é montado condicionalmente porque `exactOptionalPropertyTypes`
+  // distingue "propriedade ausente" de "propriedade com undefined" — e o
+  // cliente do Storage aceita a primeira, não a segunda. É o tipo de rigor que
+  // parece chato até ele pegar um undefined indo para dentro de uma requisição.
+  const opcoesUpload = arquivo.type ? { contentType: arquivo.type } : {};
+
+  const { error: erroUpload } = await supabase.storage
+    .from('documentos')
+    .upload(caminho, arquivo, opcoesUpload);
+
+  if (erroUpload) return { erro: erroUpload.message };
+
+  const { error } = await supabase.from('documentos').insert({
+    escritorio_id: escritorioId,
+    processo_id: processoId,
+    bucket: 'documentos',
+    caminho,
+    nome_original: arquivo.name,
+    mime: arquivo.type || null,
+    tamanho_bytes: arquivo.size,
+    sigiloso: opcoes.sigiloso,
+    visivel_portal: opcoes.visivelPortal,
+    enviado_por: enviadoPor,
+  });
+
+  // Se o metadado falhar, o arquivo fica órfão no bucket. Removê-lo aqui seria
+  // apagar o que o usuário acabou de enviar com base num erro que pode ser
+  // transitório; o caminho certo é uma rotina de limpeza que compare bucket e
+  // tabela — e ela ainda não existe, o que fica registrado como pendência.
+  return { erro: error?.message ?? null };
+}
+
+// URL assinada, com validade curta. O bucket é privado: link público de
+// documento processual é link que vaza num encaminhamento de e-mail e continua
+// valendo.
+export async function urlDoDocumento(caminho: string) {
+  const { data, error } = await supabase.storage
+    .from('documentos').createSignedUrl(caminho, 60);
+  return { url: data?.signedUrl ?? null, erro: error?.message ?? null };
+}
+
+export async function alternarVisibilidadeNoPortal(id: string, visivel: boolean) {
+  const { error } = await supabase.from('documentos')
+    .update({ visivel_portal: visivel }).eq('id', id);
+  return { erro: error?.message ?? null };
+}

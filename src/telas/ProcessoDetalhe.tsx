@@ -14,6 +14,7 @@ import {
 } from '../banco/tipos';
 import { Botao, Carregando, Erro, Sucesso, Vazio } from '../componentes/Formulario';
 import { AcessoDoPortal } from '../componentes/AcessoDoPortal';
+import { Documentos } from '../componentes/Documentos';
 
 export function ProcessoDetalhe() {
   const { id = '' } = useParams();
@@ -333,6 +334,8 @@ export function ProcessoDetalhe() {
           </ul>
         )}
       </section>
+
+      <Documentos processoId={id} />
 
       <AcessoDoPortal processoId={id} partes={partes} />
 
